@@ -1,0 +1,644 @@
+{
+  "name": "YouTube_Automation_Complete",
+  "nodes": [
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [-800, 0],
+      "id": "node-trigger",
+      "name": "When clicking 'Execute workflow'"
+    },
+
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "o3-mini"
+        },
+        "messages": {
+          "values": [
+            {
+              "role": "system",
+              "content": "You output the following in JSON:\n{\n  \"Script\": {\n    \"Intro\": \"40-70 characters\",\n    \"Base\": \"280-350 characters\",\n    \"CTA\": \"55 characters\"\n  },\n  \"Title\": \"30-50 character (Short and engaging, curiosity-driven e.g. 'I Tried This for 7 Days... Crazy Results!')\",\n  \"Description\": \"50-150 characters (Shorter, with key hashtags), hook. Add context, CTA, and hashtags.\"\n}"
+            },
+            {
+              "role": "user",
+              "content": "<user-query>\nIdea of the Video\n</user-query>"
+            }
+          ]
+        },
+        "jsonOutput": true,
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 2.1,
+      "position": [-600, 0],
+      "id": "node-ideator",
+      "name": "Ideator",
+      "credentials": {
+        "openAiApi": {
+          "id": "YWz4s0yHO9xiR30K",
+          "name": "OpenAI account 13"
+        }
+      }
+    },
+
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "assign-script-text",
+              "name": "text",
+              "value": "={{ $json.output[0].content[0].text.Script.Intro }}\n{{ $json.output[0].content[0].text.Script.Base }}\n{{ $json.output[0].content[0].text.Script.CTA }}",
+              "type": "string"
+            },
+            {
+              "id": "assign-title",
+              "name": "title",
+              "value": "={{ $json.output[0].content[0].text.Title }}",
+              "type": "string"
+            },
+            {
+              "id": "assign-description",
+              "name": "description",
+              "value": "={{ $json.output[0].content[0].text.Description }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [-400, 0],
+      "id": "node-script",
+      "name": "Script"
+    },
+
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.elevenlabs.io/v1/text-to-speech/FhOnCtjmaAIRlS1Dg2bk/with-timestamps?output_format=mp3_44100_128",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "xi-api-key",
+              "value": "sk_30a611ab3ae4a897a1b90183f8d4b8d14b4a9759aa6efe28"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ text: $json.text, model_id: \"eleven_multilingual_v2\" }) }}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "file"
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [-200, 0],
+      "id": "node-audio-gen",
+      "name": "Audio Generator"
+    },
+
+    {
+      "parameters": {
+        "jsCode": "// ── Step 1: get the full script text ──────────────────────────────\nconst items = $input.all();\n\n// Find the Script node output (it has 'text' field)\nlet scriptText = '';\nfor (const item of items) {\n  if (item.json && item.json.text) {\n    scriptText = item.json.text;\n    break;\n  }\n}\n\nif (!scriptText) {\n  throw new Error('No script text found. Check Script node output.');\n}\n\n// ── Step 2: split by words (~2.5 words/sec, 6 sec = 15 words) ────\nconst WORDS_PER_SECOND = 2.5;\nconst CHUNK_SECONDS   = 6;\nconst WORDS_PER_CHUNK = Math.round(WORDS_PER_SECOND * CHUNK_SECONDS); // 15\n\nconst cleanText = scriptText.replace(/\\n/g, ' ').replace(/\\s+/g, ' ').trim();\nconst words     = cleanText.split(' ');\n\nconst chunks = [];\nfor (let i = 0; i < words.length; i += WORDS_PER_CHUNK) {\n  const slice = words.slice(i, i + WORDS_PER_CHUNK);\n  const idx   = chunks.length;\n  chunks.push({\n    json: {\n      chunk_index : idx,\n      text        : slice.join(' '),\n      start_sec   : idx * CHUNK_SECONDS,\n      end_sec     : (idx + 1) * CHUNK_SECONDS,\n      total_chunks: Math.ceil(words.length / WORDS_PER_CHUNK)\n    }\n  });\n}\n\nreturn chunks;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [0, 0],
+      "id": "node-split",
+      "name": "Split into 6sec"
+    },
+
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "o3-mini"
+        },
+        "messages": {
+          "values": [
+            {
+              "role": "system",
+              "content": "You are a visual prompt engineer for AI image generation. Given a script chunk for a YouTube video, generate ONE detailed DALL-E image prompt. The prompt must:\n- Be cinematic and visually rich\n- Be 50-120 words\n- Match the emotion and topic of the script chunk\n- Output ONLY the image prompt text, nothing else."
+            },
+            {
+              "role": "user",
+              "content": "Script chunk {{ $json.chunk_index + 1 }} of {{ $json.total_chunks }}:\n\n{{ $json.text }}\n\nGenerate a vivid image prompt for this segment."
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 2.1,
+      "position": [200, 0],
+      "id": "node-prompt-gen",
+      "name": "Prompt Generator",
+      "credentials": {
+        "openAiApi": {
+          "id": "YWz4s0yHO9xiR30K",
+          "name": "OpenAI account 13"
+        }
+      }
+    },
+
+    {
+      "parameters": {
+        "jsCode": "// Extract the image prompt text from OpenAI response and pass chunk metadata\nconst item = $input.first();\nconst raw  = item.json;\n\n// The prompt generator returns text in output[0].content[0].text (non-JSON mode)\nlet imagePrompt = '';\ntry {\n  imagePrompt = raw.output[0].content[0].text || raw.choices[0].message.content || '';\n} catch(e) {\n  imagePrompt = JSON.stringify(raw);\n}\n\nreturn [{\n  json: {\n    image_prompt : imagePrompt.trim(),\n    chunk_index  : $('Split into 6sec').item.json.chunk_index,\n    chunk_text   : $('Split into 6sec').item.json.text,\n    start_sec    : $('Split into 6sec').item.json.start_sec,\n    end_sec      : $('Split into 6sec').item.json.end_sec,\n    total_chunks : $('Split into 6sec').item.json.total_chunks\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [400, 0],
+      "id": "node-extract-prompt",
+      "name": "Extract Prompt"
+    },
+
+    {
+      "parameters": {
+        "resource": "image",
+        "prompt": "={{ $json.image_prompt }}",
+        "options": {
+          "size": "1792x1024",
+          "quality": "hd",
+          "style": "vivid"
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 2.1,
+      "position": [600, 0],
+      "id": "node-image-gen",
+      "name": "Generate an image",
+      "credentials": {
+        "openAiApi": {
+          "id": "YWz4s0yHO9xiR30K",
+          "name": "OpenAI account 13"
+        }
+      }
+    },
+
+    {
+      "parameters": {
+        "jsCode": "// Download the image from OpenAI URL and pass binary + metadata\nconst item   = $input.first();\nconst imgUrl = item.json.data[0].url || item.json.url;\nconst idx    = $('Extract Prompt').item.json.chunk_index;\n\nif (!imgUrl) throw new Error('No image URL returned from DALL-E');\n\n// Fetch the image binary\nconst response = await fetch(imgUrl);\nif (!response.ok) throw new Error('Image download failed: ' + response.status);\n\nconst buffer     = await response.arrayBuffer();\nconst base64data = Buffer.from(buffer).toString('base64');\n\nreturn [{\n  json: {\n    chunk_index  : idx,\n    chunk_text   : $('Extract Prompt').item.json.chunk_text,\n    start_sec    : $('Extract Prompt').item.json.start_sec,\n    end_sec      : $('Extract Prompt').item.json.end_sec,\n    total_chunks : $('Extract Prompt').item.json.total_chunks,\n    image_url    : imgUrl,\n    fileName     : `chunk_${String(idx).padStart(3,'0')}.png`\n  },\n  binary: {\n    data: {\n      data        : base64data,\n      mimeType    : 'image/png',\n      fileType    : 'png',\n      fileName    : `chunk_${String(idx).padStart(3,'0')}.png`\n    }\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [800, 0],
+      "id": "node-download-img",
+      "name": "Download Image"
+    },
+
+    {
+      "parameters": {
+        "resource": "folder",
+        "operation": "create",
+        "name": "YouTube_Images_{{ $now.format('yyyyMMdd_HHmmss') }}",
+        "driveId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "My Drive"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [1000, -200],
+      "id": "node-create-folder",
+      "name": "Create Folder",
+      "executeOnce": true,
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "L4Kisqskw4DqxfvE",
+          "name": "Google Drive account 9"
+        }
+      }
+    },
+
+    {
+      "parameters": {
+        "inputDataFieldName": "data",
+        "name": "={{ $('Download Image').item.json.fileName }}",
+        "driveId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "My Drive"
+        },
+        "folderId": {
+          "__rl": true,
+          "value": "={{ $('Create Folder').item.json.id }}",
+          "mode": "id"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [1000, 0],
+      "id": "node-upload-image",
+      "name": "Upload Image to Drive",
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "L4Kisqskw4DqxfvE",
+          "name": "Google Drive account 9"
+        }
+      }
+    },
+
+    {
+      "parameters": {
+        "resource": "file",
+        "operation": "share",
+        "fileId": {
+          "__rl": true,
+          "value": "={{ $json.id }}",
+          "mode": "id"
+        },
+        "permissionsUi": {
+          "permissionsValues": {
+            "role": "reader",
+            "type": "anyone"
+          }
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [1200, 0],
+      "id": "node-share-image",
+      "name": "Share Image",
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "L4Kisqskw4DqxfvE",
+          "name": "Google Drive account 9"
+        }
+      }
+    },
+
+    {
+      "parameters": {
+        "jsCode": "// Build the public direct link for the uploaded image\nconst fileId   = $('Upload Image to Drive').item.json.id;\nconst chunkIdx = $('Download Image').item.json.chunk_index;\nconst chunkTxt = $('Download Image').item.json.chunk_text;\nconst startSec = $('Download Image').item.json.start_sec;\nconst endSec   = $('Download Image').item.json.end_sec;\n\nconst publicUrl = `https://drive.google.com/uc?export=download&id=${fileId}`;\n\nreturn [{\n  json: {\n    chunk_index  : chunkIdx,\n    chunk_text   : chunkTxt,\n    start_sec    : startSec,\n    end_sec      : endSec,\n    image_url    : publicUrl,\n    drive_file_id: fileId\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1400, 0],
+      "id": "node-build-url",
+      "name": "Build Public URL"
+    },
+
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api-singapore.klingai.com/v1/videos/image2video",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer api-key-kling-7nl653dugJsU4P3zSuzfEixcQQFR7_l4dSeh0HgPMt4"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({\n  model_name: \"kling-v1\",\n  image: $json.image_url,\n  prompt: $json.chunk_text,\n  negative_prompt: \"\",\n  duration: \"5\",\n  mode: \"std\",\n  sound: \"off\",\n  callback_url: \"https://bhasanfaisal.app.n8n.cloud/webhook/youtube-kling-callback\",\n  external_task_id: \"chunk_\" + $json.chunk_index\n}) }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [1600, 0],
+      "id": "node-kling-submit",
+      "name": "Kling: Submit Video Job"
+    },
+
+    {
+      "parameters": {
+        "jsCode": "// Store chunk metadata alongside the Kling task_id for tracking\nconst klingResponse = $input.first().json;\nconst taskId = klingResponse.data && klingResponse.data.task_id\n  ? klingResponse.data.task_id\n  : klingResponse.task_id || 'unknown';\n\nreturn [{\n  json: {\n    kling_task_id: taskId,\n    chunk_index  : $('Build Public URL').item.json.chunk_index,\n    chunk_text   : $('Build Public URL').item.json.chunk_text,\n    start_sec    : $('Build Public URL').item.json.start_sec,\n    end_sec      : $('Build Public URL').item.json.end_sec,\n    image_url    : $('Build Public URL').item.json.image_url,\n    status       : 'submitted'\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1800, 0],
+      "id": "node-store-task",
+      "name": "Store Kling Task"
+    },
+
+    {
+      "parameters": {
+        "unit": "seconds",
+        "resume": "timeInterval",
+        "amount": 60
+      },
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [2000, 0],
+      "id": "node-wait-kling",
+      "name": "Wait 60s for Kling"
+    },
+
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "=https://api-singapore.klingai.com/v1/videos/image2video/{{ $json.kling_task_id }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer api-key-kling-7nl653dugJsU4P3zSuzfEixcQQFR7_l4dSeh0HgPMt4"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [2200, 0],
+      "id": "node-kling-poll",
+      "name": "Poll Kling Status"
+    },
+
+    {
+      "parameters": {
+        "jsCode": "// Check if Kling video is ready; if not, loop back\nconst resp       = $input.first().json;\nconst taskStatus = resp.data && resp.data.task_status\n  ? resp.data.task_status\n  : resp.task_status || 'processing';\n\nconst videoUrl   = resp.data &&\n  resp.data.task_result &&\n  resp.data.task_result.videos &&\n  resp.data.task_result.videos[0]\n  ? resp.data.task_result.videos[0].url\n  : null;\n\nreturn [{\n  json: {\n    kling_task_id: $('Store Kling Task').item.json.kling_task_id,\n    chunk_index  : $('Store Kling Task').item.json.chunk_index,\n    chunk_text   : $('Store Kling Task').item.json.chunk_text,\n    start_sec    : $('Store Kling Task').item.json.start_sec,\n    end_sec      : $('Store Kling Task').item.json.end_sec,\n    task_status  : taskStatus,\n    video_url    : videoUrl,\n    is_done      : taskStatus === 'succeed' || taskStatus === 'failed'\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2400, 0],
+      "id": "node-check-kling",
+      "name": "Check Kling Done"
+    },
+
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": false,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "cond-done",
+              "leftValue": "={{ $json.is_done }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [2600, 0],
+      "id": "node-if-done",
+      "name": "Video Ready?"
+    },
+
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://queue.fal.run/fal-ai/ffmpeg-api/merge-audio-video",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Key c81af15b-0e79-48a1-a62d-f83f6c4f00a4:c32df8bc1e9e14b2ec18d8224397f2d3"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "video_url",
+              "value": "={{ $json.video_url }}"
+            },
+            {
+              "name": "audio_url",
+              "value": "={{ $('Audio Generator').item.json.data || 'https://file-examples.com/storage/fe6973e45e6a329259e0dda/2017/11/file_example_MP3_700KB.mp3' }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [2900, -100],
+      "id": "node-fal-submit",
+      "name": "fal.ai: Merge Audio+Video"
+    },
+
+    {
+      "parameters": {
+        "unit": "seconds",
+        "resume": "timeInterval",
+        "amount": 30
+      },
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [3100, -100],
+      "id": "node-wait-fal",
+      "name": "Wait 30s for fal.ai"
+    },
+
+    {
+      "parameters": {
+        "url": "={{ $json.status_url }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Key c81af15b-0e79-48a1-a62d-f83f6c4f00a4:c32df8bc1e9e14b2ec18d8224397f2d3"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [3300, -100],
+      "id": "node-fal-status",
+      "name": "fal.ai: Check Status"
+    },
+
+    {
+      "parameters": {
+        "url": "={{ $json.response_url }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Key c81af15b-0e79-48a1-a62d-f83f6c4f00a4:c32df8bc1e9e14b2ec18d8224397f2d3"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [3500, -100],
+      "id": "node-fal-result",
+      "name": "fal.ai: Get Result"
+    },
+
+    {
+      "parameters": {
+        "url": "={{ $json.video.url }}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "file"
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [3700, -100],
+      "id": "node-download-final",
+      "name": "Download Final Video"
+    },
+
+    {
+      "parameters": {
+        "resource": "video",
+        "operation": "upload",
+        "title": "={{ $('Script').item.json.title || 'AI Generated Video' }}",
+        "description": "={{ $('Script').item.json.description || 'Auto-generated by AI workflow' }}",
+        "regionCode": "BD",
+        "options": {
+          "privacyStatus": "public",
+          "categoryId": "22"
+        }
+      },
+      "type": "n8n-nodes-base.youTube",
+      "typeVersion": 1,
+      "position": [3900, -100],
+      "id": "node-youtube-upload",
+      "name": "Upload to YouTube",
+      "credentials": {
+        "youTubeOAuth2Api": {
+          "id": "YOUR_YOUTUBE_CRED_ID",
+          "name": "YouTube account"
+        }
+      }
+    }
+  ],
+
+  "connections": {
+    "When clicking 'Execute workflow'": {
+      "main": [[{ "node": "Ideator", "type": "main", "index": 0 }]]
+    },
+    "Ideator": {
+      "main": [[{ "node": "Script", "type": "main", "index": 0 }]]
+    },
+    "Script": {
+      "main": [[{ "node": "Audio Generator", "type": "main", "index": 0 }]]
+    },
+    "Audio Generator": {
+      "main": [[{ "node": "Split into 6sec", "type": "main", "index": 0 }]]
+    },
+    "Split into 6sec": {
+      "main": [[{ "node": "Prompt Generator", "type": "main", "index": 0 }]]
+    },
+    "Prompt Generator": {
+      "main": [[{ "node": "Extract Prompt", "type": "main", "index": 0 }]]
+    },
+    "Extract Prompt": {
+      "main": [[{ "node": "Generate an image", "type": "main", "index": 0 }]]
+    },
+    "Generate an image": {
+      "main": [[{ "node": "Download Image", "type": "main", "index": 0 }]]
+    },
+    "Download Image": {
+      "main": [
+        [
+          { "node": "Create Folder", "type": "main", "index": 0 },
+          { "node": "Upload Image to Drive", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Create Folder": {
+      "main": [[{ "node": "Upload Image to Drive", "type": "main", "index": 0 }]]
+    },
+    "Upload Image to Drive": {
+      "main": [[{ "node": "Share Image", "type": "main", "index": 0 }]]
+    },
+    "Share Image": {
+      "main": [[{ "node": "Build Public URL", "type": "main", "index": 0 }]]
+    },
+    "Build Public URL": {
+      "main": [[{ "node": "Kling: Submit Video Job", "type": "main", "index": 0 }]]
+    },
+    "Kling: Submit Video Job": {
+      "main": [[{ "node": "Store Kling Task", "type": "main", "index": 0 }]]
+    },
+    "Store Kling Task": {
+      "main": [[{ "node": "Wait 60s for Kling", "type": "main", "index": 0 }]]
+    },
+    "Wait 60s for Kling": {
+      "main": [[{ "node": "Poll Kling Status", "type": "main", "index": 0 }]]
+    },
+    "Poll Kling Status": {
+      "main": [[{ "node": "Check Kling Done", "type": "main", "index": 0 }]]
+    },
+    "Check Kling Done": {
+      "main": [[{ "node": "Video Ready?", "type": "main", "index": 0 }]]
+    },
+    "Video Ready?": {
+      "main": [
+        [{ "node": "fal.ai: Merge Audio+Video", "type": "main", "index": 0 }],
+        [{ "node": "Wait 60s for Kling", "type": "main", "index": 0 }]
+      ]
+    },
+    "fal.ai: Merge Audio+Video": {
+      "main": [[{ "node": "Wait 30s for fal.ai", "type": "main", "index": 0 }]]
+    },
+    "Wait 30s for fal.ai": {
+      "main": [[{ "node": "fal.ai: Check Status", "type": "main", "index": 0 }]]
+    },
+    "fal.ai: Check Status": {
+      "main": [[{ "node": "fal.ai: Get Result", "type": "main", "index": 0 }]]
+    },
+    "fal.ai: Get Result": {
+      "main": [[{ "node": "Download Final Video", "type": "main", "index": 0 }]]
+    },
+    "Download Final Video": {
+      "main": [[{ "node": "Upload to YouTube", "type": "main", "index": 0 }]]
+    }
+  },
+
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "meta": {
+    "instanceId": "dc9e9d9b5ac2c2649067ce8b8e3dacc327e85ee95b1358b61270823ac820c66d"
+  },
+  "tags": []
+}
