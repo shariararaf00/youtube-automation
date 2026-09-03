@@ -41,8 +41,9 @@ JSON	Workflow configuration and data exchange
 
 ## ⚡ How It Works
 
-The automation follows a complete AI-powered video production pipeline.
+ The automation follows a complete AI-powered video production pipeline.
 
+<pre>
 ┌──────────────────────────────┐
 │        MANUAL TRIGGER        │
 │        Start Workflow        │
@@ -60,69 +61,73 @@ The automation follows a complete AI-powered video production pipeline.
 │   Prepare Generated Content  │
 └──────────────┬───────────────┘
                │
-        ┌──────┴─────────────┐
-        │                    │
-        ▼                    ▼
-┌──────────────────┐  ┌──────────────────┐
-│    ELEVENLABS    │  │  SPLIT SCRIPT    │
-│  Text → Speech   │  │   ~6 Sec Chunks  │
-└──────────────────┘  └────────┬─────────┘
-                                │
-                                ▼
-                    ┌────────────────────┐
-                    │   OPENAI PROMPT    │
-                    │  Visual Prompt Gen │
-                    └─────────┬──────────┘
-                              │
-                              ▼
-                    ┌────────────────────┐
-                    │   OPENAI IMAGE     │
-                    │     GENERATION     │
-                    └─────────┬──────────┘
-                              │
-                              ▼
-                    ┌────────────────────┐
-                    │    GOOGLE DRIVE    │
-                    │  Store + Share     │
-                    └─────────┬──────────┘
-                              │
-                              ▼
-                    ┌────────────────────┐
-                    │      KLING AI      │
-                    │   Image → Video    │
-                    └─────────┬──────────┘
-                              │
-                              ▼
-                    ┌────────────────────┐
-                    │    WAIT + POLL     │
-                    │   Check Status     │
-                    └─────────┬──────────┘
-                              │
-                         ┌────▼─────┐
-                         │  Ready?  │
-                         └──┬────┬──┘
-                            │    │
-                         No │    │ Yes
-                            │    ▼
-                            │ ┌────────────────────┐
-                            │ │   FAL.AI / FFMPEG  │
-                            │ │ Merge Audio+Video  │
-                            │ └─────────┬──────────┘
-                            │           │
-                            │           ▼
-                            │ ┌────────────────────┐
-                            │ │ Download Final     │
-                            │ │ Video              │
-                            │ └─────────┬──────────┘
-                            │           │
-                            │           ▼
-                            │ ┌────────────────────┐
-                            │ │  YOUTUBE UPLOAD    │
-                            │ │   Publish Video    │
-                            │ └────────────────────┘
-                            │
-                            └──────► Wait + Poll
-
+        ┌──────┴──────┐
+        │             │
+        ▼             ▼
+┌──────────────┐  ┌──────────────┐
+│  ELEVENLABS  │  │ SPLIT SCRIPT │
+│ Text → Speech│  │ ~6 Sec Chunks│
+└──────────────┘  └──────┬───────┘
+                         │
+                         ▼
+                ┌──────────────────┐
+                │ OPENAI PROMPT    │
+                │ Visual Prompt Gen│
+                └────────┬─────────┘
+                         │
+                         ▼
+                ┌──────────────────┐
+                │   OPENAI IMAGE   │
+                │    GENERATION    │
+                └────────┬─────────┘
+                         │
+                         ▼
+                ┌──────────────────┐
+                │   GOOGLE DRIVE   │
+                │   Store + Share  │
+                └────────┬─────────┘
+                         │
+                         ▼
+                ┌──────────────────┐
+                │     KLING AI     │
+                │   Image → Video  │
+                └────────┬─────────┘
+                         │
+                         ▼
+                ┌──────────────────┐
+                │    WAIT + POLL   │
+                │   Check Status   │
+                └────────┬─────────┘
+                         │
+                         ▼
+                  ┌─────────────┐
+                  │   READY?    │
+                  └──────┬──────┘
+                         │
+                    ┌────┴────┐
+                    │         │
+                   NO        YES
+                    │         │
+                    │         ▼
+                    │  ┌──────────────────┐
+                    │  │ FAL.AI / FFMPEG  │
+                    │  │ Merge Audio+Video│
+                    │  └────────┬─────────┘
+                    │           │
+                    │           ▼
+                    │  ┌──────────────────┐
+                    │  │ DOWNLOAD FINAL   │
+                    │  │      VIDEO       │
+                    │  └────────┬─────────┘
+                    │           │
+                    │           ▼
+                    │  ┌──────────────────┐
+                    │  │ YOUTUBE UPLOAD   │
+                    │  │   Publish Video  │
+                    │  └──────────────────┘
+                    │
+                    └──────────────► WAIT + POLL
+</pre>
 
 
   ## 🔄 Workflow Breakdown
