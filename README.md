@@ -229,7 +229,7 @@ The workflow stores the generated Kling task ID so that the processing status ca
 Kling AI processing is asynchronous.
 
 The workflow waits for approximately 60 seconds and then checks the job status.
-
+<pre>
 Submit Video Job
        ↓
    Wait 60 sec
