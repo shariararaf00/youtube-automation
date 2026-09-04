@@ -281,7 +281,7 @@ Category ID: 22
 
 
                                     
-## Technical Architecture
+##Technical Architecture
                     ┌────────────────┐
                     │      n8n       │
                     │  Orchestration │
@@ -389,8 +389,9 @@ Workflow exports should be sanitized before uploading.
 Screenshots must not expose credentials or private information.
 
 
-## ⚙️ Setup
-Requirements
+ ## Setup
+
+ Requirements
 
 The workflow requires access to:
 
