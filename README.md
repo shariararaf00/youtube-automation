@@ -279,9 +279,9 @@ Region: BD
 Privacy: Public
 Category ID: 22
 
+## Technical Architecture
 
-                                    
-##Technical Architecture
+ 
                     ┌────────────────┐
                     │      n8n       │
                     │  Orchestration │
@@ -315,8 +315,9 @@ Category ID: 22
 
 
 
-## Data Flow
-<pre>
+**##Data Flow**
+
+ <pre>
 Video Idea
     ↓
 OpenAI
